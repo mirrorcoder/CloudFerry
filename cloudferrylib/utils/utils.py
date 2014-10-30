@@ -53,6 +53,9 @@ INSTANCE_BODY = 'instance'
 DIFF_BODY = 'diff'
 EPHEMERAL_BODY = 'ephemeral'
 
+NETWORK_RESOURCE = 'network'
+NETWORKS_TYPE = 'networks'
+NETWORK_BODY = 'network'
 
 IMAGE_RESOURCE = 'image'
 IMAGES_TYPE = 'images'
