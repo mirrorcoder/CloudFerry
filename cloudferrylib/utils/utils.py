@@ -48,8 +48,11 @@ VOLUME_BODY = 'volume'
 VOLUMES_DB = 'volumes_db'
 
 COMPUTE_RESOURCE = 'compute'
-COMPUTE_TYPE = 'instances'
-COMPUTE_BODY = 'instance'
+INSTANCES_TYPE = 'instances'
+INSTANCE_BODY = 'instance'
+DIFF_BODY = 'diff'
+EPHEMERAL_BODY = 'ephemeral'
+
 
 IMAGE_RESOURCE = 'image'
 IMAGES_TYPE = 'images'
