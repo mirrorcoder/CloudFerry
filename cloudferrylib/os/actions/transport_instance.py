@@ -17,6 +17,7 @@ TRANSPORTER_MAP = {True: {True: transport_ceph_to_ceph_via_ssh.TransportCephToCe
 CLOUD = 'cloud'
 BACKEND = 'backend'
 CEPH = 'ceph'
+ISCSI = 'iscsi'
 COMPUTE = 'compute'
 INSTANCES = 'instances'
 INSTANCE = 'instance'
@@ -24,6 +25,8 @@ DIFF = 'diff'
 EPHEMERAL = 'ephemeral'
 PATH_DST = 'path_dst'
 TEMP = 'temp'
+BOOT_VOLUME = 'boot_volume'
+BOOT_IMAGE = 'boot_image'
 
 
 class TransportInstance(action.Action):
@@ -32,7 +35,37 @@ class TransportInstance(action.Action):
         is_src_ceph = cloud_src.config[CLOUD][BACKEND].lower() == CEPH
         is_dst_ceph = cloud_dst.config[CLOUD][BACKEND].lower() == CEPH
         instance_id = info[COMPUTE][INSTANCES].iterkeys().next()
+        instance_boot = BOOT_IMAGE if info[COMPUTE][INSTANCES][instance_id][utl.INSTANCE_BODY]['image'] else BOOT_VOLUME
+        backend_ephem_drv_src = cloud_src.resources[utl.COMPUTE_RESOURCE].config.compute.backend
+        backend_storage_dst = cloud_src.resources[utl.STORAGE_RESOURCE].config.storage.backend
 
+        """
+            Вот такая структура у тебя будет, многое из того что ты написал может не работать,
+            Идеально заюзать словарь для этих целей как в импортере старой архитектуре
+        """
+        if instance_boot == BOOT_IMAGE:
+            if backend_ephem_drv_src == CEPH:
+                #Transport V -> I ---> I
+                #Deploy Instance
+                pass
+            elif backend_ephem_drv_src == ISCSI:
+                if backend_storage_dst == CEPH:
+                    #Transport D ---> Dt
+                    #Convert to File B -> Bf
+                    #Merge Dt + Bf
+                    #Convert to Image Dt -> B
+                    #Deploy Instance
+                    pass
+                elif backend_storage_dst == ISCSI:
+                    #Deploy Instance
+                    #Transport D ---> D
+                    pass
+        elif instance_boot == BOOT_VOLUME:
+            #Convert Volume to Image V -> I
+            #Transport I ---> I
+            #Deploy Instance
+            pass
+        
         # TODO if has no image?
         if is_src_ceph:
             transporter = transport_ceph_to_file_via_ssh.TransportCephToFileViaSsh()
