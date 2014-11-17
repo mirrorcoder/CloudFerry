@@ -23,9 +23,9 @@ class CreateNewVolumes(action.Action):
         self.cloud = cloud
         super(CreateNewVolumes, self).__init__()
 
-    def run(self, volumes=None, **kwargs):
+    def run(self, storage_info=None, **kwargs):
         storage = self.cloud.resources[utl.STORAGE_RESOURCE]
-        volumes_new = storage.deploy(volumes)
+        volumes_new = storage.deploy(storage_info)
         return {
-            'volumes_new': volumes_new
+            'storage_info': volumes_new
         }
