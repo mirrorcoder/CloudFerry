@@ -149,7 +149,6 @@ class NovaCompute(compute.Compute):
 
         is_ceph = cfg.compute.backend.lower() == utl.CEPH
         direct_transfer = cfg.migrate.direct_compute_transfer
-
         if direct_transfer:
             ext_cidr = cfg.cloud.ext_cidr
             host = utl.get_ext_ip(ext_cidr,
@@ -509,7 +508,7 @@ class NovaCompute(compute.Compute):
         else:
             return True
 
-    def wait_for_status(self, id_obj, status, limit_retry=90):
+    def wait_for_status(self, id_obj, status, limit_retry=90000):
         count = 0
         getter = self.nova_client.servers
         while getter.get(id_obj).status.lower() != status.lower():

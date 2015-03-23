@@ -80,13 +80,14 @@ class BaseScheduler(object):
 
     def start(self):
         # try to prepare for migration
-        self.process_chain(self.preparation, "PREPARATION")
+        #self.process_chain(self.preparation, "PREPARATION")
         # if we didn't get error during preparation task - process migration
         if self.status_error != ERROR:
             self.process_chain(self.migration, "MIGRATION")
             # if we had an error during process migration - rollback
             if self.status_error == ERROR:
-                self.process_chain(self.rollback, "ROLLBACK")
+                pass
+                # self.process_chain(self.rollback, "ROLLBACK")
 
     def task_run(self, task):
         task(namespace=self.namespace)

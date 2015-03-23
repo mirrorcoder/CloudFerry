@@ -279,8 +279,8 @@ class KeystoneIdentity(identity.Identity):
                 if overwrite_passwd and not keep_passwd:
                     self.update_user(_user['meta']['new_id'],
                                      password=password)
-                    self._passwd_notification(user['email'], user['name'],
-                                              password)
+                    #self._passwd_notification(user['email'], user['name'],
+                    #                          password)
                 continue
 
             tenant_id = tenant_mapped_ids[user['tenantId']]
@@ -290,8 +290,9 @@ class KeystoneIdentity(identity.Identity):
             if self.config['migrate']['keep_user_passwords']:
                 _user['meta']['overwrite_password'] = True
             else:
-                self._passwd_notification(user['email'], user['name'],
-                                          password)
+                #self._passwd_notification(user['email'], user['name'],
+                #                          password)
+                pass
 
     def _passwd_notification(self, email, name, password):
         if not self.postman:
