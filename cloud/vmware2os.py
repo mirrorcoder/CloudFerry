@@ -23,10 +23,16 @@ from cloudferrylib.os.storage import cinder_storage
 from cloudferrylib.os.network import neutron
 from cloudferrylib.os.identity import keystone
 from cloudferrylib.os.compute import nova_compute
-from cloudferrylib.os.object_storage import swift_storage
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.vmware.compute import compute
 from cloudferrylib.vmware.actions import transport_instance
+from cloudferrylib.os.actions import get_filter
+from cloudferrylib.os.actions import get_info_instances
+from cloudferrylib.vmware.actions import create_flavor
+from cloudferrylib.vmware.actions import convert_disk_vm_to_os
+from cloudferrylib.os.actions import prepare_networks
+from cloudferrylib.vmware.actions import transfer_disk
+from cloudferrylib.vmware.actions import upload_file_to_glance
 
 
 class Vmware2OSFerry(cloud_ferry.CloudFerry):
@@ -61,4 +67,14 @@ class Vmware2OSFerry(cloud_ferry.CloudFerry):
         scheduler_migr.start()
 
     def process_migrate(self):
-        return transport_instance.TransportInstance(self.init, 'src_cloud')
+        trans_inst_task = transport_instance.TransportInstance(self.init, 'dst_cloud')
+        convert_task = convert_disk_vm_to_os.ConvertDiskVMwareToOS(self.init, 'dst_cloud')
+        create_flavor_task = create_flavor.CreateFlavor(self.init, 'dst_cloud')
+        get_filter_task = get_filter.GetFilter(self.init, 'src_cloud')
+        get_info_instances_task = get_info_instances.GetInfoInstances(self.init, 'src_cloud')
+        prepare_network_task = prepare_networks.PrepareNetworks(self.init, 'dst_cloud')
+        upload_to_glance_task = upload_file_to_glance.UploadFileToGlance(self.init, 'dst_cloud')
+        transfer_disk_task = transfer_disk.TransferDisk(self.init, 'src_cloud')
+        return (get_filter_task >> get_info_instances_task >> transfer_disk_task >>
+                convert_task >> upload_to_glance_task >>
+                create_flavor_task >> prepare_network_task >> trans_inst_task)

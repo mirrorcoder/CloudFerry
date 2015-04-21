@@ -105,6 +105,8 @@ migrate_opts = [
                help='Size of one chunk to transfer via SSH'),
     cfg.StrOpt('group_file_path',
                help='Path to file with the groups of VMs'),
+    cfg.StrOpt('key_name_use', default="",
+               help='Use Pair key name for VMs'),
 ]
 
 mail = cfg.OptGroup(name='mail',

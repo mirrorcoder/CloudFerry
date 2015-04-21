@@ -36,7 +36,10 @@ class ComputeVMWare:
     def __init__(self, config, cloud):
         self.config = config
         self.cloud = cloud
-        self.client = client.ClientDatastore("Administrator@vsphere.local", "Pa$$w0rd", None, "https://172.16.40.37")
+        self.client = client.ClientDatastore(self.config.cloud.user,
+                                             self.config.cloud.password,
+                                             None,
+                                             self.config.cloud.auth_url)
         self.ssh = SshUtil(None, None, "localhost")
 
     def parse_cfg(self, data):
@@ -48,14 +51,28 @@ class ComputeVMWare:
         return res
 
     def download_disk(self, user, host, dc, ds, file_obj, vm="", output=""):
-        return self.client.download_to_host(user, host, dc, ds, file_obj, vm, output)
+        tmp = self.config.cloud.temp
+        return self.client.download_to_host(user, host, dc, ds, file_obj, vm, tmp+'/'+output)
 
     def convert_flat_disk(self, user, host, src_path, dst_path, format_disk='qcow2'):
-        cmd = 'qemu-img convert %s -O %s %s' % (src_path, format_disk, dst_path)
+        tmp = self.config.cloud.temp
+        cmd = 'qemu-img convert %s -O %s %s' % (src_path, format_disk, tmp+'/'+dst_path)
         self.ssh.execute(cmd, host_exec=host, user=user)
 
     def get_info_instance(self, dcPath, dsName, vmName):
         return self.parse_cfg(self.client.download(dcPath, dsName, "%s.vmx" % vmName, vmName))
+
+    def read_info(self, target='instances', **kwargs):
+        if target != 'instances':
+            raise ValueError('Only "instances" values allowed')
+
+        search_opts = kwargs.get('search_opts')
+        info = {
+            'instances': {}
+        }
+        for opts in search_opts:
+            info['instances'].update(self.get(opts['dc'], opts['ds'], opts['vm']))
+        return info
 
     def get(self, dcPath, dsName, vmName):
         data = self.get_info_instance(dcPath, dsName, vmName)
@@ -70,36 +87,38 @@ class ComputeVMWare:
                 size_flat = int(f['Size']) / (1024*1024*1024)
             if f['Name'] == swap_file:
                 size_swap = int(f['Size']) / (1024*1024*1024)
-        res = {
-            'instances': [{
-                'instance': {
-                    'dcPath': dcPath,
-                    'dsName': dsName,
-                    'vmName': vmName,
-                    'diskFile': [disk_file_flat],
-                    'name': data['displayName'].replace("\"", ''),
-                    'guestOS': data['guestOS'].replace("\"", ''),
-                    'network': [{
-                        'mac': data['ethernet0.generatedAddress'].replace("\"", ''),
-                        'ip': None
-                    }],
-                    'nics': [],
-                    'key_name': "qwerty",
-                    'flavor': None,
-                    'image': None,
-                    'boot_mode': 'image',
-                    'flavors': [{
-                        'name': "%s_flavor" % vmName.replace("\"", ''),
-                        'ram': int(data['memSize'].replace("\"", '')),
-                        'vcpus': int(data['numvcpus'].replace("\"", '')) if 'numvcpus' in data else 1,
-                        'disk': size_flat,
-                        'swap': int(data['memSize'].replace("\"", ''))/1024,
-                        'ephemeral': 0,
-                        'rxtx_factor': 1.0,
-                        'is_public': True
-
-                    }]
-                }
-            }]
-        }
+        res = {vmName: {'instance': {
+            'dcPath': dcPath,
+            'dsName': dsName,
+            'vmName': vmName,
+            'diskFile': [disk_file_flat],
+            'name': data['displayName'].replace("\"", ''),
+            'guestOS': data['guestOS'].replace("\"", ''),
+            'network': [{
+                            'mac': data['ethernet0.generatedAddress'].replace("\"", ''),
+                            'ip': None
+                        }],
+            'interfaces': [{
+                'ip': None,
+                'mac': data['ethernet0.generatedAddress'].replace("\"", ''),
+                'name': 'net04',
+                'floatingip': None
+            }],
+            'security_groups': ['default'],
+            'tenant_name': 'admin',
+            'nics': [],
+            'key_name': self.config.migrate.key_name_use,
+            'flavor': None,
+            'image': None,
+            'boot_mode': 'image',
+            'flavors': [{
+                'name': "%s_flavor" % vmName.replace("\"", ''),
+                'ram': int(data['memSize'].replace("\"", '')),
+                'vcpus': int(data['numvcpus'].replace("\"", '')) if 'numvcpus' in data else 1,
+                'disk': size_flat,
+                'swap': int(data['memSize'].replace("\"", ''))/1024,
+                'ephemeral': 0,
+                'rxtx_factor': 1.0,
+                'is_public': True
+                        }]}}}
         return res
