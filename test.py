@@ -1,3 +1,4 @@
+
 # Copyright (c) 2014 Mirantis Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the License);
@@ -14,35 +15,41 @@
 
 __author__ = 'mirrorcoder'
 
-from cloudferrylib.vmware.client import client
-from cloudferrylib.vmware.compute import compute
-c = client.ClientDatastore("Administrator@vsphere.local", "Pa$$w0rd", None, "https://172.16.40.37")
-computeVMWare = compute.ComputeVMWare(c)
-print "DATACENTERS ------------"
-for i in c.get_datacenters():
-    print i
-print "DATASTORES (DC: test)------------"
-for i in c.get_datastores("test"):
-    print i
-print "VMS(DC: test, DS: datastore1) ------------"
-for i in c.get_vms("test", "datastore1"):
-    print i
-print "FILES(DC: test, DS: datastore1, VM: CentOS) ------------"
-for i in c.get_files_vm("test", "datastore1", "CentOS"):
-    print i
-data = computeVMWare.get("test", "datastore1", "CentOS")['instances'][0]['instance']
-c.download_to_host('root',
-                   '172.18.172.77',
-                   data['dcPath'],
-                   data['dsName'],
-                   data['diskFile'],
-                   data['vmName'],
-                   data['diskFile'])
-#qemu-img convert CentOS-flat.vmdk -O qcow2 vm.img
-computeVMWare.convert_flat_disk('root',
-                                '172.18.172.77',
-                                data['diskFile'],
-                                "%s.img" % data['diskFile'])
+from pysphere import VIServer
+server = VIServer()
+server.connect("172.16.40.37", "Administrator@vsphere.local", "Pa$$w0rd")
+vm = server.get_vm_by_name("centos2")
+vm.list_files("test/datastore1/centos2")
+
+# from cloudferrylib.vmware.client import client
+# from cloudferrylib.vmware.compute import compute
+# c = client.ClientDatastore("Administrator@vsphere.local", "Pa$$w0rd", None, "https://172.16.40.37")
+# computeVMWare = compute.ComputeVMWare(c)
+# print "DATACENTERS ------------"
+# for i in c.get_datacenters():
+#     print i
+# print "DATASTORES (DC: test)------------"
+# for i in c.get_datastores("test"):
+#     print i
+# print "VMS(DC: test, DS: datastore1) ------------"
+# for i in c.get_vms("test", "datastore1"):
+#     print i
+# print "FILES(DC: test, DS: datastore1, VM: CentOS) ------------"
+# for i in c.get_files_vm("test", "datastore1", "CentOS"):
+#     print i
+# data = computeVMWare.get("test", "datastore1", "CentOS")['instances'][0]['instance']
+# c.download_to_host('root',
+#                    '172.18.172.77',
+#                    data['dcPath'],
+#                    data['dsName'],
+#                    data['diskFile'],
+#                    data['vmName'],
+#                    data['diskFile'])
+# #qemu-img convert CentOS-flat.vmdk -O qcow2 vm.img
+# computeVMWare.convert_flat_disk('root',
+#                                 '172.18.172.77',
+#                                 data['diskFile'],
+#                                 "%s.img" % data['diskFile'])
 #glance image-create --name CentOS --disk-format qcow2 --container-format bare --is-public True --file vm.img
 #create-ports
 #nova instance-create

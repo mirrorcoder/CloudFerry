@@ -30,6 +30,12 @@
 __author__ = 'mirrorcoder'
 from cloudferrylib.utils.ssh_util import SshUtil
 from cloudferrylib.vmware.client import client
+from cloudferrylib.utils import timeout_exception
+import json
+import time
+from pyVim import connect
+from pyVmomi import vmodl
+from pyVmomi import vim
 
 
 class ComputeVMWare:
@@ -40,7 +46,36 @@ class ComputeVMWare:
                                              self.config.cloud.password,
                                              None,
                                              self.config.cloud.auth_url)
+        self.si = connect.SmartConnect(
+            host=self.config.cloud.host,
+            user=self.config.cloud.user,
+            pwd=self.config.cloud.password,
+            port=443)
         self.ssh = SshUtil(None, None, "localhost")
+
+    def change_status(self, status, instance_id):
+        search_index = self.si.content.searchIndex
+        vm = search_index.FindByUuid(None, instance_id, True, True)
+        if status == 'active':
+            vm.PowerOn()
+        if status == 'shutoff':
+            vm.PowerOff()
+
+    def wait_for_status(self, id_obj, status, limit_retry=90):
+        count = 0
+        search_index = self.si.content.searchIndex
+        vm = search_index.FindByUuid(None, id_obj, True, True)
+        if status == 'active':
+            status = vim.VirtualMachinePowerState.poweredOn
+        if status == 'shutoff':
+            status = vim.VirtualMachinePowerState.poweredOff
+        while vm.runtime.powerState != status.lower():
+            time.sleep(2)
+            vm = search_index.FindByUuid(None, id_obj, True, True)
+            count += 1
+            if count > limit_retry:
+                raise timeout_exception.TimeoutException(
+                    vm.runtime.powerState, status, "Timeout exp")
 
     def parse_cfg(self, data):
         res = {}
@@ -71,8 +106,68 @@ class ComputeVMWare:
             'instances': {}
         }
         for opts in search_opts:
-            info['instances'].update(self.get(opts['dc'], opts['ds'], opts['vm']))
+            if not isinstance(opts, str):
+                info['instances'].update(self.get(opts['dc'], opts['ds'], opts['vm']))
+            else:
+                info['instances'].update(self.get_by_id(opts))
         return info
+
+    def get_by_id(self, instance_id):
+        search_index = self.si.content.searchIndex
+        vm = search_index.FindByUuid(None, instance_id, True, True)
+        sufffix_disk_file_flat = '-flat.vmdk'
+        devices = vm.config.hardware.device
+        mac_addr = [dev.macAddress for dev in devices if 'macAddress' in dev.__dict__][0]
+        disks = {dev.unitNumber: (dev.backing.fileName.split("]")[1].split("/")[1],
+                                  
+                                  dev.capacityInBytes / (1024*1024*1024),
+                                  dev.backing.fileName) for dev in devices
+                     if (isinstance(dev, vim.vm.device.VirtualDisk))}
+
+        res = {vm.config.instanceUuid: {'instance': {
+            'dcPath': vm.parent.parent.name,
+            'dsName': vm.config.datastoreUrl[0].name,
+            'vmName': vm.config.name,
+            'diskFile': [disk_file_flat],
+            'name': vm.config.name,
+            'guestOS': vm.config.guestFullName,
+            'network': [{
+                            'mac': mac_addr,
+                            'ip': None
+                        }],
+            'interfaces': [{
+                'ip': None,
+                'mac': mac_addr,
+                'name': 'net04',
+                'floatingip': None
+            }],
+            'security_groups': ['default'],
+            'tenant_name': 'admin',
+            'nics': [],
+            'key_name': self.config.migrate.key_name_use,
+            'flavor': None,
+            'image': None,
+            'boot_mode': 'image',
+            'flavors': [{
+                'name': "%s_flavor" % vm.config.name,
+                'ram': vm.config.hardware.memoryMB,
+                'vcpus': vm.config.hardware.numCPU,
+                'disk': flat_size,
+                'swap': vm.config.hardware.memoryMB/1024,
+                'ephemeral': 0,
+                'rxtx_factor': 1.0,
+                'is_public': True
+                        }]}}}
+        return res
+
+    def __normalize_uuid(self, in_uuid):
+        _uuid = in_uuid.replace(" ", "").replace("-", "")
+        part1_uuid = _uuid[:8]
+        part2_uuid = _uuid[8:12]
+        part3_uuid = _uuid[12:16]
+        part4_uuid = _uuid[16:20]
+        part5_uuid = _uuid[20:]
+        return "%s-%s-%s-%s-%s" % (part1_uuid, part2_uuid, part3_uuid, part4_uuid, part5_uuid)
 
     def get(self, dcPath, dsName, vmName):
         data = self.get_info_instance(dcPath, dsName, vmName)
@@ -87,7 +182,8 @@ class ComputeVMWare:
                 size_flat = int(f['Size']) / (1024*1024*1024)
             if f['Name'] == swap_file:
                 size_swap = int(f['Size']) / (1024*1024*1024)
-        res = {vmName: {'instance': {
+        uuid = self.__normalize_uuid(data['vc.uuid'])
+        res = {data['vc.uuid']: {'instance': {
             'dcPath': dcPath,
             'dsName': dsName,
             'vmName': vmName,

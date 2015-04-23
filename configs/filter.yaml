@@ -1,4 +1,2 @@
 instances:
-    - dc: test
-      ds: datastore1
-      vm: centos2
+    - 500de964-643c-0a87-f440-c8b68dcded76
