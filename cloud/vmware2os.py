@@ -32,9 +32,11 @@ from cloudferrylib.vmware.actions import create_flavor
 from cloudferrylib.vmware.actions import convert_disk_vm_to_os
 from cloudferrylib.os.actions import prepare_networks
 from cloudferrylib.os.actions import stop_vm
+from cloudferrylib.os.actions import attach_used_volumes_via_compute
 from cloudferrylib.vmware.actions import transfer_disk
+from cloudferrylib.vmware.actions import transfer_disks_volume
 from cloudferrylib.vmware.actions import upload_file_to_glance
-from cloudferrylib.vmware.actions import test
+# from cloudferrylib.vmware.actions import test
 
 
 class Vmware2OSFerry(cloud_ferry.CloudFerry):
@@ -77,9 +79,12 @@ class Vmware2OSFerry(cloud_ferry.CloudFerry):
         prepare_network_task = prepare_networks.PrepareNetworks(self.init, 'dst_cloud')
         upload_to_glance_task = upload_file_to_glance.UploadFileToGlance(self.init, 'dst_cloud')
         transfer_disk_task = transfer_disk.TransferDisk(self.init, 'src_cloud')
+        transfer_disks_volume_task = transfer_disks_volume.TransferDisksVolume(self.init, 'src_cloud')
         stop_vms_task = stop_vm.StopVms(self.init, 'src_cloud')
+        act_attaching = attach_used_volumes_via_compute.AttachVolumesCompute(self.init, cloud='dst_cloud')
         return (get_filter_task >> get_info_instances_task >> stop_vms_task >>
                 transfer_disk_task >> convert_task >> upload_to_glance_task >>
-                create_flavor_task >> prepare_network_task >> trans_inst_task)
+                create_flavor_task >> prepare_network_task >> trans_inst_task >>
+                transfer_disks_volume_task >> act_attaching)
         # test_task = test.Test(self.init, 'src_cloud')
         # return test_task

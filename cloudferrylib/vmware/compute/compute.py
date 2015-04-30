@@ -32,6 +32,7 @@ from cloudferrylib.utils.ssh_util import SshUtil
 from cloudferrylib.vmware.client import client
 from cloudferrylib.utils import timeout_exception
 import json
+import copy
 import time
 from pyVim import connect
 from pyVmomi import vmodl
@@ -91,7 +92,7 @@ class ComputeVMWare:
 
     def convert_flat_disk(self, user, host, src_path, dst_path, format_disk='qcow2'):
         tmp = self.config.cloud.temp
-        cmd = 'qemu-img convert %s -O %s %s' % (src_path, format_disk, tmp+'/'+dst_path)
+        cmd = 'qemu-img convert %s -O %s %s' % (tmp+'/'+src_path, format_disk, tmp+'/'+dst_path)
         self.ssh.execute(cmd, host_exec=host, user=user)
 
     def get_info_instance(self, dcPath, dsName, vmName):
@@ -118,45 +119,52 @@ class ComputeVMWare:
         sufffix_disk_file_flat = '-flat.vmdk'
         devices = vm.config.hardware.device
         mac_addr = [dev.macAddress for dev in devices if 'macAddress' in dev.__dict__][0]
-        disks = {dev.unitNumber: (dev.backing.fileName.split("]")[1].split("/")[1],
-                                  
-                                  dev.capacityInBytes / (1024*1024*1024),
-                                  dev.backing.fileName) for dev in devices
+        disks = {dev.unitNumber: {'fileName': dev.backing.fileName.split("]")[1].split("/")[1],
+                                  'fileName-flat': dev.backing.fileName.split("]")[1].split("/")[1].split(".vmdk")[0] +
+                                  sufffix_disk_file_flat,
+                                  'size': dev.capacityInBytes / (1024*1024*1024) if dev.capacityInBytes else
+                                  dev.capacityInKB / (1024*1024),
+                                  'fullPath': dev.backing.fileName} for dev in devices
                      if (isinstance(dev, vim.vm.device.VirtualDisk))}
 
-        res = {vm.config.instanceUuid: {'instance': {
-            'dcPath': vm.parent.parent.name,
-            'dsName': vm.config.datastoreUrl[0].name,
-            'vmName': vm.config.name,
-            'diskFile': [disk_file_flat],
-            'name': vm.config.name,
-            'guestOS': vm.config.guestFullName,
-            'network': [{
-                            'mac': mac_addr,
-                            'ip': None
-                        }],
-            'interfaces': [{
-                'ip': None,
-                'mac': mac_addr,
-                'name': 'net04',
-                'floatingip': None
-            }],
-            'security_groups': ['default'],
-            'tenant_name': 'admin',
-            'nics': [],
-            'key_name': self.config.migrate.key_name_use,
-            'flavor': None,
-            'image': None,
-            'boot_mode': 'image',
-            'flavors': [{
-                'name': "%s_flavor" % vm.config.name,
-                'ram': vm.config.hardware.memoryMB,
-                'vcpus': vm.config.hardware.numCPU,
-                'disk': flat_size,
-                'swap': vm.config.hardware.memoryMB/1024,
-                'ephemeral': 0,
-                'rxtx_factor': 1.0,
-                'is_public': True
+        res = {vm.config.instanceUuid: {
+            'meta': {
+                'volume': []
+            },
+            'instance': {
+                'dcPath': vm.parent.parent.name,
+                'dsName': vm.config.datastoreUrl[0].name,
+                'vmName': vm.config.name,
+                'rootDisk': [disks[0]['fileName-flat']],
+                'disks': {u: d for u,d in disks.items() if u != 0},
+                'name': vm.config.name,
+                'guestOS': vm.config.guestFullName,
+                'network': [{
+                                'mac': mac_addr,
+                                'ip': None
+                            }],
+                'interfaces': [{
+                    'ip': None,
+                    'mac': mac_addr,
+                    'name': 'net04',
+                    'floatingip': None
+                }],
+                'security_groups': ['default'],
+                'tenant_name': 'admin',
+                'nics': [],
+                'key_name': self.config.migrate.key_name_use,
+                'flavor': None,
+                'image': None,
+                'boot_mode': 'image',
+                'flavors': [{
+                    'name': "%s_flavor" % vm.config.name,
+                    'ram': vm.config.hardware.memoryMB,
+                    'vcpus': vm.config.hardware.numCPU,
+                    'disk': disks[0]['size'],
+                    'swap': vm.config.hardware.memoryMB/1024,
+                    'ephemeral': 0,
+                    'rxtx_factor': 1.0,
+                    'is_public': True
                         }]}}}
         return res
 

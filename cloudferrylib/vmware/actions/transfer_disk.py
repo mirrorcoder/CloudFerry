@@ -70,8 +70,8 @@ class TransferDisk(action.Action):
                                         dst_cloud.getIpSsh(),
                                         data['dcPath'],
                                         data['dsName'],
-                                        data['diskFile'][0],
+                                        data['rootDisk'][0],
                                         data['vmName'],
-                                        data['diskFile'][0])
+                                        data['rootDisk'][0])
 
         return {}

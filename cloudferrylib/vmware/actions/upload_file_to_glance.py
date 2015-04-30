@@ -66,6 +66,7 @@ class UploadFileToGlance(action.Action):
         for (id_inst, inst) in info['instances'].iteritems():
             data = inst['instance']
             # Task Upload FileToGlance
+            tmp = cfg.temp
             cmd = ("glance --os-username=%s --os-password=%s --os-tenant-name=%s " +
                            "--os-auth-url=%s " +
                            "image-create --name %s --disk-format=%s --container-format=bare --file %s| " +
@@ -76,7 +77,7 @@ class UploadFileToGlance(action.Action):
                    cfg.auth_url,
                    data['vmName'] + '.img',
                    'qcow2',
-                   "%s.img" % data['diskFile'][0])
+                   cfg.temp+'/'+"%s.img" % data['rootDisk'][0])
             image_id = ssh.execute(cmd, host_exec=cfg.host, user='root').split("|")[2].replace(' ', '')
             data['image'] = image_id
         return {'info': info}

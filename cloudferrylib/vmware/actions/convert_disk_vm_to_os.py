@@ -67,7 +67,7 @@ class ConvertDiskVMwareToOS(action.Action):
             data = inst['instance']
             computeVMWare.convert_flat_disk(None,
                                             dst_cloud.getIpSsh(),
-                                            data['diskFile'][0],
-                                            "%s.img" % data['diskFile'][0])
+                                            data['rootDisk'][0],
+                                            "%s.img" % data['rootDisk'][0])
 
         return {}
