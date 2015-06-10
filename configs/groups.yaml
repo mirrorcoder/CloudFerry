@@ -1,4 +1,4 @@
-group_by:
+  group_by:
     - network
 user_defined_group_1:
     - <server1>

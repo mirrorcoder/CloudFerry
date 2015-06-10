@@ -2,12 +2,6 @@ namespace:
   info_result:
       instances: {}
 
-preparation:
-  - create_snapshot: True
-
-rollback:
-  - restore_from_snapshot: True
-
 process:
   - transport_instances_and_dependency_resources:
       - act_get_filter: True
@@ -18,6 +12,7 @@ process:
       - get_next_instance: True
       - trans_one_inst:
           - act_stop_vms: True
+          - act_ip_maps: True
           - create_flavor_act: True
           - act_merge_root: True
           - act_root_transport_data: True
@@ -31,3 +26,6 @@ process:
       - save_result_migrate_instances: True
       - is_instances: ['get_next_instance']
       - rename_info_iter: True
+      - act_get_info_inst_dst: True
+      - act_start_vms: True
+      - act_phpmyadmin: True

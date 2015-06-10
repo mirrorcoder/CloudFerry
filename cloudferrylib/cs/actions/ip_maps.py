@@ -18,13 +18,19 @@ from cloudferrylib.utils import utils as utl
 from fabric.api import settings, run
 from cloudferrylib.utils.drivers import ssh_file_to_file
 from cloudferrylib.os.actions import prepare_networks
-
+import time
 AVAILABLE = 'available'
+ID_ROUTER = "b4f46132-2b6b-487f-b739-c7807d85d8b3"
+
+MAPS = {
+    '172.16.66.80': '172.18.172.112',
+    '172.16.66.88': '172.18.172.110'
+}
 
 
-class MergeRoot(action.Action):
+class IpMaps(action.Action):
     def __init__(self, init, cloud=None):
-        super(MergeRoot, self).__init__(init, cloud)
+        super(IpMaps, self).__init__(init, cloud)
 
     def run(self, info=None, **kwargs):
         # search_opts = kwargs.get('search_opts', {})
@@ -33,40 +39,11 @@ class MergeRoot(action.Action):
         cfg_cloud_src = compute_resource_src.config.cloud
         cfg_cloud_dst = compute_resource_dst.config.cloud
         temp = cfg_cloud_src.temp
-
         #Create LOOP
         for (id_inst, inst) in info['instances'].iteritems():
             data = inst['instance']
-            base = "%s/%s" % (temp,
-                              'base')
-            diff = "%s/%s" % (temp,
-                              'diff')
-            if data['is_template']:
-                cmd_cp = "cp %s/%s %s"
-                cmd_rebase = "cd %s && qemu-img rebase -u -b base diff"
-                cmd_commit = "cd %s && qemu-img commit diff"
-
-                cmd_cp_base = cmd_cp % ('/mnt/usr/export/primary',
-                                        data['templateid'],
-                                        base)
-                cmd_cp_diff = cmd_cp % ('/mnt/usr/export/primary',
-                                        data['rootDisk'][0]['id'],
-                                        diff)
-                qemu_img_rebase = cmd_rebase % temp
-                qemu_img_commit = cmd_commit % temp
-                with settings(host_string=cfg_cloud_src.host):
-                    #CP BASE
-                    run(cmd_cp_base)
-                    #CP DIFF
-                    run(cmd_cp_diff)
-                    #REBASE
-                    run(qemu_img_rebase)
-                    #MERGE
-                    run(qemu_img_commit)
-                inst['diff']['path_src'] = base
-            #Prepare Trans Diff
-            inst['diff']['path_dst'] = "%s/%s" % (cfg_cloud_dst.temp, 'diff')
-            inst['diff']['host_dst'] = cfg_cloud_dst.host
+            if data['interfaces'][0]['floatingip'] in MAPS:
+                data['interfaces'][0]['floatingip'] = MAPS[data['interfaces'][0]['floatingip']]
 
         return {
             'info': info
