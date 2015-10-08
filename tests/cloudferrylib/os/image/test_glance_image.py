@@ -122,16 +122,17 @@ class GlanceImageTestCase(test.TestCase):
         }
 
     def test_get_glance_client(self):
+        self.glance_mock_client.reset_mock()
         fake_endpoint = 'fake_endpoint'
         fake_auth_token = 'fake_auth_token'
         self.identity_mock.get_endpoint_by_service_type.return_value = (
             fake_endpoint)
         self.identity_mock.get_auth_token_from_user.return_value = (
             fake_auth_token)
-
         gl_client = self.glance_image.get_client()
-        mock_calls = [mock.call(endpoint=fake_endpoint, token=fake_auth_token)]
-
+        mock_calls = [mock.call(fake_endpoint,
+                                token=fake_auth_token,
+                                session=None)]
         self.glance_mock_client.assert_has_calls(mock_calls)
         self.assertEqual(self.glance_mock_client(), gl_client)
 

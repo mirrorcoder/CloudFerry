@@ -34,7 +34,7 @@ from cloudferrylib.os.image import filters as glance_filters
 from cloudferrylib.utils import file_like_proxy
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.utils import remote_runner
-
+from cloudferrylib.utils import iterator_as_file
 
 LOG = utl.get_log(__name__)
 
@@ -145,7 +145,10 @@ class GlanceImage(image.Image):
 
     def get_ref_image(self, image_id):
         try:
-            return self.glance_client.images.data(image_id)._resp
+            return getattr(self.glance_client.images.data(image_id),
+                           '_resp',
+                           iterator_as_file.IteratorAsFile(
+                               self.glance_client.images.data(image_id)))
         except exc.HTTPInternalServerError:
             raise exception.ImageDownloadError
 
