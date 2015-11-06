@@ -334,7 +334,8 @@ class NeutronNetwork(network.Network):
                                              'name',
                                              'shared',
                                              'tenant_name',
-                                             'router:external')
+                                             'router:external',
+                                             'provider:segmentation_id')
         result['res_hash'] = res_hash
         return result
 
