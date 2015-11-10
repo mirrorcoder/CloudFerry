@@ -12,13 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
+
+from cloudferrylib.base import exception
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
 from keystoneclient.openstack.common.apiclient import exceptions as ks_exc
 from novaclient import exceptions as nova_exc
-from cloudferrylib.base import exception
 
 LOG = utl.get_log(__name__)
+LIMIT_RETRY_CHECK_INSTANCE = 25
 
 
 class CheckCloud(action.Action):
@@ -163,9 +166,21 @@ class CheckCloud(action.Action):
             LOG.error(err_message)
             raise exception.AbortMigrationError(err_message)
         compute_resource.nova_client.servers.delete(vm_new_ids.keys()[0])
+        for i in xrange(LIMIT_RETRY_CHECK_INSTANCE):
+            if compute_resource.get_instances_list(
+                    search_opts={'id': vm_new_ids.keys()[0]}):
+                time.sleep(1)
+                continue
+            break
+        if compute_resource.get_instances_list(
+                search_opts={'id': vm_new_ids.keys()[0]}):
+            raise exception.AbortMigrationError("CF could not wait for the"
+                                                "removal of an instance"
+                                                "during the test. "
+                                                "ID instance= %s" %
+                                                vm_new_ids.keys()[0])
         image_res.glance_client.images.delete(migrate_image.id)
         compute_resource.nova_client.flavors.delete(flavor_id)
         ident_resource.keystone_client.tenants.delete(tenant_id)
-
         # delete private network and subnet
         net_resource.neutron_client.delete_network(private_network_id)
