@@ -114,6 +114,21 @@ class ext_dict(dict):
         raise AttributeError("Exporter has no attribute %s" % name)
 
 
+class Instance(object):
+    COMPARISON_FIELDS = ['name', 'flav_details', 'key_name', 'interfaces',
+                         'volumes']
+
+    def __init__(self, instance):
+        self.instance = instance
+
+    def __eq__(self, other):
+        for field in self.COMPARISON_FIELDS:
+            if (self.instance['instance'][field] !=
+                    other.instance['instance'][field]):
+                return False
+        return True
+
+
 def get_snapshots_list_repository(path=PATH_TO_SNAPSHOTS):
     path_source = path + '/source'
     path_dest = path + '/dest'

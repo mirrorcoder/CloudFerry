@@ -29,6 +29,7 @@ preparation:
           - check_dst_sql: True
           - check_dst_rabbit: True
           - act_get_info_objects_dst: False
+      - act_filter_similar_vms: True
       - check_networks: True
   - check_users_availability: True
   - create_snapshot: True

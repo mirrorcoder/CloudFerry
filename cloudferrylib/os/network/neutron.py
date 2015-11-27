@@ -17,6 +17,7 @@ import pprint
 
 import ipaddr
 import netaddr
+import time
 
 from neutronclient.common import exceptions as neutron_exc
 from neutronclient.v2_0 import client as neutron_client
@@ -25,6 +26,7 @@ from cloudferrylib.base import exception
 from cloudferrylib.base import network
 from cloudferrylib.os.identity import keystone as ksresource
 from cloudferrylib.utils import cache
+from cloudferrylib.utils import timeout_exception
 from cloudferrylib.utils import utils as utl
 
 
@@ -68,6 +70,16 @@ class NeutronNetwork(network.Network):
             kwargs["region_name"] = self.config.cloud.region
 
         return neutron_client.Client(**kwargs)
+
+    def wait_deleted_port(self, port_id, retry=60):
+        count_try = 0
+        while self.get_ports_list(id=port_id):
+            count_try += 1
+            time.sleep(1)
+            if count_try == retry:
+                raise timeout_exception.TimeoutException("Attempts over. The port "
+                                                         "has not yet been removed.")
+        return True
 
     def read_info(self, **kwargs):
 

@@ -22,7 +22,6 @@ from cloudferrylib.base.action import action
 from cloudferrylib.os.network import neutron
 from cloudferrylib.utils import utils
 
-
 LOG = utils.get_log(__name__)
 
 
@@ -42,14 +41,12 @@ class CheckNetworks(action.Action):
     def run(self, **kwargs):
         LOG.debug("Checking networks...")
         overlapped_resources = {}
-
         src_net = self.src_cloud.resources[utils.NETWORK_RESOURCE]
         dst_net = self.dst_cloud.resources[utils.NETWORK_RESOURCE]
         src_compute = self.src_cloud.resources[utils.COMPUTE_RESOURCE]
 
         search_opts = kwargs.get('search_opts_tenant', {})
         search_opts.update({'search_opts': kwargs.get('search_opts', {})})
-
         LOG.debug("Retrieving Network information from Source cloud...")
         ports = src_net.get_ports_list()
         src_net_info = NetworkInfo(src_net.read_info(**search_opts), ports)
@@ -88,8 +85,180 @@ class CheckNetworks(action.Action):
             LOG.critical('Network overlapping list:\n%s', overlapped_resources)
             raise exception.AbortMigrationError(
                 "There is a number of overlapping Network resources, so "
-                "migration process can not be continued. Resolve it please and"
+                "migration process can not "
+                "be continued. Resolve it please and"
                 " try again.")
+        self.check_conflicts_ports(src_net,
+                                   dst_net,
+                                   kwargs.get('search_opts', {}),
+                                   kwargs.get('similar_instances', {}),
+                                   )
+        
+    def get_instances(self, cloud, search_opts={}):
+        compute = cloud.resources[utils.COMPUTE_RESOURCE]
+        instances = compute.read_info('instances',
+                                      search_opts=
+                                      search_opts)['instances']
+        return instances
+
+    def extract_mac_fip_from_instances(self, instances):
+        ports = {}
+        for inst in instances:
+            ports_inst = inst['instance']['interfaces']
+            for p in ports_inst:
+                for fixip in p['ip_addresses']:
+                    ports[(fixip, p['mac_address'])] = inst
+        return ports
+
+    def check_conflicts_ports(self, src_net, dst_net, filter_instances, similar_instances):
+        LOG.info("Detecting similar ports...")
+        exclude_ports = self.extract_mac_fip_from_instances(similar_instances)
+        LOG.info("Detecting ports conflicts...")
+        instances = self.get_instances(self.src_cloud, filter_instances)\
+            .values()
+        filter_ports = self.extract_mac_fip_from_instances(instances).keys()
+        src_ports = self.get_ports('compute:', src_net)
+        dst_ports = self.get_ports('compute:', dst_net)
+        src_ports_by_fixip = self.ports_by_fixed_ips(src_ports)
+        dst_ports_by_fixip = self.ports_by_fixed_ips(dst_ports)
+        src_ports_by_mac = self.ports_by_mac(src_ports)
+        dst_ports_by_mac = self.ports_by_mac(dst_ports)
+        self.check_intersects_ports_fixips(src_ports_by_fixip,
+                                           dst_ports_by_fixip,
+                                           src_net,
+                                           dst_net,
+                                           exclude_ports,
+                                           filter_ports)
+        self.check_intersects_ports_mac(src_ports_by_mac,
+                                        dst_ports_by_mac,
+                                        src_net,
+                                        dst_net,
+                                        exclude_ports,
+                                        filter_ports)
+
+    def check_intersects_ports_mac(self,
+                                   src_ports_by_mac,
+                                   dst_ports_by_mac,
+                                   src_net,
+                                   dst_net,
+                                   exclude_ports,
+                                   filter_ports):
+        src_ports = set(src_ports_by_mac)
+        dst_ports = set(dst_ports_by_mac)
+        inter_mac = src_ports & dst_ports
+        exclude_ports_mac = {}
+        not_filer_ports = []
+        filter_ports_by_mac = {fp[1]: fp[0] for fp in filter_ports}
+        for mac in inter_mac:
+            if mac not in filter_ports_by_mac:
+                not_filer_ports.append(mac)
+        for mac in inter_mac:
+            for fix in dst_ports_by_mac[mac]['fixed_ips']:
+                if (fix['ip_address'], mac) in exclude_ports:
+                    exclude_ports_mac[mac] = dst_ports_by_mac[mac]
+        inter_mac = inter_mac - set(exclude_ports_mac) - set(not_filer_ports)
+        for mac in inter_mac:
+            src_port = src_ports_by_mac[mac]
+            dst_port = dst_ports_by_mac[mac]
+            src_network = src_net.get_network(
+                {'id': src_port['network_id']}, '')
+            dst_network = dst_net.get_network(
+                {'id': dst_port['network_id']}, '')
+            LOG.warning("---------------")
+            LOG.warning("Conflicts ports by mac...")
+            LOG.warning("SRC port: port id: %s",
+                        src_port['id'])
+            LOG.warning("          mac: %s", mac)
+            LOG.warning("     fixed ip: %s", src_port['fixed_ips'])
+            LOG.warning("    port name: %s", src_port['name'])
+            LOG.warning("   ID NETWORK: %s", src_port['network_id'])
+            LOG.warning(" NAME NETWORK: %s", src_network['name'])
+            LOG.warning("DST port: port id: %s",
+                        dst_port['id'])
+            LOG.warning("          mac: %s", mac)
+            LOG.warning("     fixed ip: %s", dst_port['fixed_ips'])
+            LOG.warning("    port name: %s", dst_port['name'])
+            LOG.warning("   ID NETWORK: %s", dst_port['network_id'])
+            LOG.warning(" NAME NETWORK: %s", dst_network['name'])
+            LOG.warning("---------------")
+        if inter_mac:
+            raise exception.AbortMigrationError("Src and dst "
+                                                "clouds have conflicts "
+                                                "ports by mac")
+
+    def check_intersects_ports_fixips(self,
+                                      src_ports_fixip,
+                                      dst_ports_fixip,
+                                      src_net,
+                                      dst_net,
+                                      exclude_ports,
+                                      filter_ports):
+        src_ports = set(src_ports_fixip)
+        dst_ports = set(dst_ports_fixip)
+        inter_fixips = src_ports & dst_ports
+        exclude_ports_fix = {}
+        not_filer_ports = []
+        filter_ports_by_fip = {fp[0]: fp[1] for fp in filter_ports}
+        for fip in inter_fixips:
+            if fip not in filter_ports_by_fip:
+                not_filer_ports.append(fip)
+        for fix in inter_fixips:
+            if (fix, dst_ports_fixip[fix]['mac_address']) in exclude_ports:
+                exclude_ports_fix[fix] = dst_ports_fixip[fix]
+        inter_fixips = inter_fixips - set(exclude_ports_fix) \
+                       - set(not_filer_ports)
+        for fixip in inter_fixips:
+            src_port = src_ports_fixip[fixip]
+            dst_port = dst_ports_fixip[fixip]
+            src_network = src_net.get_network(
+                {'id': src_port['network_id']}, '')
+            dst_network = dst_net.get_network(
+                {'id': dst_port['network_id']}, '')
+            LOG.warning("---------------")
+            LOG.warning("Conflicts ports by fixed ips...")
+            LOG.warning("SRC port: port id: %s",
+                        src_port['id'])
+            LOG.warning("          mac: %s", src_port['mac_address'])
+            LOG.warning("     fixed ip: %s", fixip)
+            LOG.warning("    port name: %s", src_port['name'])
+            LOG.warning("   ID NETWORK: %s", src_port['network_id'])
+            LOG.warning(" NAME NETWORK: %s", src_network['name'])
+            LOG.warning("DST port: port id: %s",
+                        dst_port['id'])
+            LOG.warning("          mac: %s", dst_port['mac_address'])
+            LOG.warning("     fixed ip: %s", fixip)
+            LOG.warning("    port name: %s", dst_port['name'])
+            LOG.warning("   ID NETWORK: %s", dst_port['network_id'])
+            LOG.warning(" NAME NETWORK: %s", dst_network['name'])
+            LOG.warning("---------------")
+        if inter_fixips:
+            raise exception.AbortMigrationError("Src and dst "
+                                                "clouds have conflicts "
+                                                "ports by fixed ip")
+
+    def get_ports(self, pattern_device_owner, network):
+        filter_func_ports = lambda port: port \
+            if pattern_device_owner in port['device_owner'] else None
+        ports = filter(filter_func_ports,
+                       network.get_ports_list())
+        return ports
+
+    def ports_by_fixed_ips(self, ports):
+        ports_fixed_ips = {}
+        for port in ports:
+            for fixip in port['fixed_ips']:
+                if fixip in ports_fixed_ips.keys():
+                    LOG.warning("One fixed ips on some mac address")
+                ports_fixed_ips[fixip['ip_address']] = port
+        return ports_fixed_ips
+
+    def ports_by_mac(self, ports):
+        ports_mac = {}
+        for port in ports:
+            if port['mac_address'] in ports_mac.keys():
+                LOG.warning("Some ports on one mac address")
+            ports_mac[port['mac_address']] = port
+        return ports_mac
 
 
 class ComputeInfo(object):

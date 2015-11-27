@@ -23,30 +23,50 @@ from tests import test
 
 class CheckNetworksTestCase(test.TestCase):
     @staticmethod
-    def get_action(src_net_info, dst_net_info=None, src_compute_info=None):
+    def get_action(src_net_info, dst_net_info=None, src_compute_info=None,
+                   dst_compute_info=None, src_identity_info=None,
+                   dst_identity_info=None):
         if not dst_net_info:
             dst_net_info = {'networks': [],
                             'subnets': [],
                             'floating_ips': []}
         if not src_compute_info:
             src_compute_info = {'instances': {}}
+        if not dst_compute_info:
+            dst_compute_info = {'instances': {}}
+        if not src_identity_info:
+            src_identity_info = {'tenants': {}}
+        if not dst_identity_info:
+            dst_identity_info = {'tenants': {}}
+        fake_src_identity = mock.Mock()
+        fake_src_identity.read_info.return_value = src_identity_info
+        fake_dst_identity = mock.Mock()
+        fake_dst_identity.read_info.return_value = dst_identity_info
+
         fake_src_compute = mock.Mock()
         fake_src_compute.read_info.return_value = src_compute_info
+        fake_dst_compute = mock.Mock()
+        fake_dst_compute.read_info.return_value = dst_compute_info
         fake_src_net = mock.Mock()
         fake_src_net.read_info.return_value = src_net_info
         fake_src_net.get_ports_list.return_value = [
             {'id': 'fake_port_id',
              'network_id': 'fake_network_id',
-             'device_id': 'fake_instance_id'}]
+             'device_id': 'fake_instance_id',
+             'device_owner': 'fake_device_owner'}]
 
         fake_dst_net = mock.Mock()
         fake_dst_net.read_info.return_value = dst_net_info
+        fake_dst_net.get_ports_list.return_value = []
         fake_src_cloud = mock.Mock()
         fake_dst_cloud = mock.Mock()
         fake_config = {}
         fake_src_cloud.resources = {'network': fake_src_net,
-                                    'compute': fake_src_compute}
-        fake_dst_cloud.resources = {'network': fake_dst_net}
+                                    'compute': fake_src_compute,
+                                    'identity': fake_src_identity}
+        fake_dst_cloud.resources = {'network': fake_dst_net,
+                                    'compute': fake_dst_compute,
+                                    'identity': fake_dst_identity}
         fake_init = {
             'src_cloud': fake_src_cloud,
             'dst_cloud': fake_dst_cloud,
@@ -341,7 +361,8 @@ class CheckNetworksTestCase(test.TestCase):
         src_cmp_info = {'instances': {
             'fake_instance_id_not_in_external': {
                 'instance': {
-                    'id': 'fake_instance_id_not_in_external'}}}}
+                    'id': 'fake_instance_id_not_in_external',
+                    'interfaces': []}}}}
 
         self.get_action(src_net_info, src_compute_info=src_cmp_info).run()
 
