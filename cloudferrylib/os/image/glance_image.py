@@ -571,3 +571,6 @@ class GlanceImage(image.Image):
         out = self.runner.run(cmd)
         image_id = out.split("|")[2].replace(' ', '')
         return image_id
+
+    def to_serialize(self):
+        return "<object>|%s|%s|%s" % ('init', self.cloud.position, 'image')

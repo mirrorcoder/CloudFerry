@@ -104,12 +104,25 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
                 ssh_chunks.CopyFilesBetweenComputeHosts,
         }
 
-    def migrate(self, scenario=None):
+    def migrate(self, scenario=None, restore=None):
         namespace_scheduler = namespace.Namespace({
             '__init_task__': self.init,
             'info_result': {
                 utl.INSTANCES_TYPE: {}
             }
+        })
+        restore_steps = False
+        restore_all_ns = False
+        restore_sys_ns = False
+        if restore:
+            restore_steps = cloud_ferry.STEPS_RESTORE in restore
+            restore_all_ns = cloud_ferry.ALL_NAMESPACE_RESTORE in restore
+            restore_sys_ns = cloud_ferry.SYS_VARS_NAMESPACE_RESTORE in restore
+        if restore_all_ns or restore_sys_ns:
+            namespace_scheduler.restore(self.init,
+                                        restore_sys_ns)
+        namespace_scheduler.vars.update({
+            '__restore__': restore
         })
         # "process_migration" is dict with 3 keys:
         #    "preparation" - is cursor that points to tasks must be processed
@@ -128,6 +141,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
             process_migration = {k: cursor.Cursor(v)
                                  for k, v in scenario.get_net().items()}
         scheduler_migr = scheduler.Scheduler(namespace=namespace_scheduler,
+                                             restore=restore_steps,
                                              **process_migration)
         scheduler_migr.start()
         return scheduler_migr.status_error

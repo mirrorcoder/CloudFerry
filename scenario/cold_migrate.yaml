@@ -3,6 +3,10 @@ namespace:
       instances: {}
 
 preparation:
+  - is_restore: ['act_get_filter']
+  - pre_restore:
+    - prepare_restore_from_vm_snapshot_src: False
+    - prepare_restore_from_vm_snapshot_dst: True
   - pre_migration_test:
       - act_get_filter: True
       - act_check_filter: True

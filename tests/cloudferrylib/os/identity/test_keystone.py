@@ -297,7 +297,7 @@ class KeystoneIdentityTestCase(test.TestCase):
         for role in fake_roles_list:
             fake_info['roles'].append(
                 {'role': {'name': role.name,
-                          'id': role},
+                          'id': role.id},
                  'meta': {}})
         return fake_info
 

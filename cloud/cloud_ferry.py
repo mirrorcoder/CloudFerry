@@ -14,6 +14,10 @@
 
 import importlib
 
+ALL_NAMESPACE_RESTORE = 1
+STEPS_RESTORE = 2
+SYS_VARS_NAMESPACE_RESTORE = 3
+
 
 class CloudFerry(object):
     def __new__(cls, config):

@@ -16,9 +16,21 @@
 from cloudferrylib.scheduler import task
 
 
+class UniqIdAction(object):
+    def __init__(self, pos=0):
+        self.pos = pos
+
+    def __call__(self, *args, **kwargs):
+        self.pos += 1
+        return self.pos
+
+uniq_id_action = UniqIdAction()
+
+
 class Action(task.Task):
 
     def __init__(self, init, cloud=None):
+        self.uniq_id = uniq_id_action()
         self.cloud = None
         self.src_cloud = None
         self.dst_cloud = None

@@ -33,9 +33,10 @@ STEP_ROLLBACK = "ROLLBACK"
 
 
 class BaseScheduler(object):
-    def __init__(self, namespace=None, migration=None, preparation=None,
+    def __init__(self, namespace=None, restore=False, migration=None, preparation=None,
                  rollback=None):
         self.namespace = namespace if namespace else Namespace()
+        self.restore = restore
         self.status_error = NO_ERROR
         self.migration = migration
         self.preparation = preparation
@@ -106,10 +107,34 @@ class BaseScheduler(object):
         self.cursor = cursor
 
 
-class SchedulerThread(BaseScheduler):
-    def __init__(self, namespace=None, thread_task=None, migration=None,
+class SchedulerJournaling(BaseScheduler):
+    def event_start_task(self, task):
+        res = True
+        if self.restore:
+            if task.uniq_id == self.namespace.vars['__current_task__']:
+                self.restore = False
+            else:
+                LOG.info('%s Skip task: %s', '-' * 8, task)
+                res = False
+        if not self.restore:
+            self.namespace.vars['__current_task__'] = task.uniq_id
+            self.namespace.snapshot()
+        res = res and super(SchedulerJournaling, self).event_start_task(task)
+        return res
+
+    def event_end_task(self, task):
+        return super(SchedulerJournaling, self).event_end_task(task)
+
+    def event_error_task(self, task, e):
+        self.namespace.save_last_snapshot()
+        return super(SchedulerJournaling, self).event_error_task(task, e)
+
+
+class SchedulerThread(SchedulerJournaling):
+    def __init__(self, namespace=None, restore=False, thread_task=None, migration=None,
                  preparation=None, rollback=None, scheduler_parent=None):
-        super(SchedulerThread, self).__init__(namespace, migration=migration,
+        super(SchedulerThread, self).__init__(namespace, restore,
+                                              migration=migration,
                                               preparation=preparation,
                                               rollback=rollback)
         self.map_func_task[WrapThreadTask()] = self.task_run_thread

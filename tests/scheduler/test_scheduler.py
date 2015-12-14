@@ -69,6 +69,7 @@ class MigrationRollbackTestCase(test.TestCase):
 def mock_out_task(throws_exception=False):
     t = task.Task()
     t.run = mock.Mock()
+    t.uniq_id = '1'
     if throws_exception:
         t.run.side_effect = Exception
     return t

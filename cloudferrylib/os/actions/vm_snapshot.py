@@ -75,9 +75,10 @@ class CheckPointVm(action.Action):
         vm = info[info.keys()[0]]
         rollback_vars_local = copy.deepcopy(rollback_vars)
         success_vms = rollback_vars_local['vms']
+        instance_id = info.keys()[0]
         pair_vm = {
             'src_id': vm['old_id'] if 'old_id' in vm else '',
-            'dst_id': info.keys()[0]
+            'dst_id': instance_id
         }
         success_vms.append(pair_vm)
         return {
@@ -89,7 +90,7 @@ class VmRestore(VmSnapshotBasic):
 
     def run(self, rollback_vars=None, *args, **kwargs):
         LOG.debug("restoring vms from snapshot")
-        snapshot_from_namespace = kwargs.get(self.namespace_variable)
+        snapshot_from_namespace = kwargs.get(self.namespace_variable, [])
         compute = self.get_compute_resource()
         vm_id_targets = ('src_id', 'dst_id') \
             if self.cloud.position == 'src' else ('dst_id', 'src_id')
@@ -100,7 +101,7 @@ class VmRestore(VmSnapshotBasic):
                 vm_id_targets[1]] for pair_vms in vms}
         for vm in self.get_list_of_vms():
             if vm.id in vms_succesed:
-                LOG.debug("Success pair vms")
+                LOG.debug("Successfully copied instances")
                 if self.cloud.position == 'src':
                     LOG.debug("SRC ID %s", vm.id)
                     LOG.debug("DST ID %s", vms_succesed[vm.id])
@@ -125,4 +126,20 @@ class VmRestore(VmSnapshotBasic):
                 compute.change_status(
                     snapshot_from_namespace.get(vm.id),
                     instance_id=vm.id)
+        return {}
+
+
+class IsRestore(action.Action):
+    """
+    If not required restore, then the migration
+    process will take place as normal, otherwise start rollback
+    """
+    def __init__(self, init):
+        super(IsRestore, self).__init__(init)
+
+    def run(self, __restore__=None, **kwargs):
+        if not __restore__:
+            self.num_element = 1
+        else:
+            self.num_element = 0
         return {}

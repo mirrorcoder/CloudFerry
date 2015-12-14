@@ -47,7 +47,7 @@ DEFAULT_FILTERS_FILES = 'configs/filters'
 
 
 @task
-def migrate(name_config=None, debug=False):
+def migrate(name_config=None, debug=False, restore=None):
     """
         :name_config - name of config yaml-file, example 'config.yaml'
     """
@@ -60,11 +60,30 @@ def migrate(name_config=None, debug=False):
         cloud = cloud_ferry.CloudFerry(cfglib.CONF)
         status_error = cloud.migrate(Scenario(
             path_scenario=cfglib.CONF.migrate.scenario,
-            path_tasks=cfglib.CONF.migrate.tasks_mapping))
+            path_tasks=cfglib.CONF.migrate.tasks_mapping), restore=restore)
     except oslo.config.cfg.Error:
         traceback.print_exc()
         sys.exit(ERROR_INVALID_CONFIGURATION)
     sys.exit(status_error)
+
+
+@task
+def restore(name_config=None, debug=False):
+    migrate(name_config, debug,
+            restore=[cloud_ferry.STEPS_RESTORE,
+                     cloud_ferry.ALL_NAMESPACE_RESTORE])
+
+
+@task
+def restore_namespace(name_config=None, debug=False):
+    migrate(name_config, debug,
+            restore=[cloud_ferry.ALL_NAMESPACE_RESTORE])
+
+
+@task
+def restore_sys_namespace(name_config=None, debug=False):
+    migrate(name_config, debug,
+            restore=[cloud_ferry.SYS_VARS_NAMESPACE_RESTORE])
 
 
 @task

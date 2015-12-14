@@ -45,6 +45,7 @@ tasks:
    get_next_instance: ['GetInfoIter']
    rename_info_iter: ['RenameInfo', 'info_result', 'info']
    is_instances: ['IsEndIter']
+   is_restore: ['IsRestore']
    check_instances: ['CheckInstances']
    act_i_to_f: ['LoadComputeImageToFile', 'dst_cloud']
    act_merge: ['MergeBaseDiff', 'dst_cloud']
@@ -112,3 +113,5 @@ tasks:
    act_server_group_trans: ['ServerGroupTransporter']
    remove_failed_instances: ['RemoveFailedInstances', 'dst_cloud']
    act_check_point_vm: ['CheckPointVm']
+   prepare_restore_from_vm_snapshot_dst: ['VmRestore', 'dst_cloud']
+   prepare_restore_from_vm_snapshot_src: ['VmRestore', 'src_cloud']

@@ -137,7 +137,7 @@ class KeystoneIdentity(identity.Identity):
 
         elif isinstance(identity_obj, keystone_client.roles.Role):
             return {'role': {'name': identity_obj.name,
-                             'id': identity_obj},
+                             'id': identity_obj.id},
                     'meta': {}}
 
         LOG.error('KeystoneIdentity converter has received incorrect value. '
