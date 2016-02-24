@@ -26,7 +26,7 @@ class SchedulerTestCase(test.TestCase):
         fake_cursor = [mock_out_task(),
                        mock_out_task(),
                        mock_out_task()]
-        s = scheduler.Scheduler(migration=fake_cursor)
+        s = scheduler.Scheduler(process=fake_cursor)
         s.event_start_task = mock.Mock()
         s.event_start_task.return_value = True
         s.event_end_task = mock.Mock()
@@ -45,7 +45,7 @@ class MigrationRollbackTestCase(test.TestCase):
         migration = mock_out_task(throws_exception=True)
         rollback = mock_out_task()
 
-        s = scheduler.Scheduler(migration=[migration], rollback=[rollback])
+        s = scheduler.Scheduler(process=[migration], rollback=[rollback])
         s.start()
 
         assert rollback.run.called
@@ -55,7 +55,7 @@ class MigrationRollbackTestCase(test.TestCase):
         preparation = mock_out_task(throws_exception=True)
         rollback = mock_out_task()
 
-        s = scheduler.Scheduler(migration=[migration],
+        s = scheduler.Scheduler(process=[migration],
                                 preparation=[preparation],
                                 rollback=[rollback])
 

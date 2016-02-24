@@ -69,8 +69,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         #    "preparation" - is cursor that points to tasks must be processed
         #                    before migration i.e - taking snapshots,
         #                    figuring out all services are up
-        #    "migration" - is cursor that points to the first
-        #                  task in migration process
+        #    "process" - is cursor that points to the first
+        #                  task in process process
         #    "rollback" - is cursor that points to tasks must be processed
         #                 in case of "migration" failure
         scenario.init_tasks(self.init)

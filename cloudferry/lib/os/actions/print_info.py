@@ -39,7 +39,7 @@ class PrintScenario(action.Action):
             LOG.info('Scenario preparation: %s',
                      pprint.pformat(cloud.scenario.preparation))
             LOG.info('Scenario migration: %s',
-                     pprint.pformat(cloud.scenario.migration))
+                     pprint.pformat(cloud.scenario.process))
             LOG.info('Scenario rollback: %s',
                      pprint.pformat(cloud.scenario.rollback))
 

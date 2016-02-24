@@ -35,11 +35,11 @@ STEP_ROLLBACK = "ROLLBACK"
 
 
 class BaseScheduler(object):
-    def __init__(self, namespace=None, migration=None, preparation=None,
+    def __init__(self, namespace=None, process=None, preparation=None,
                  rollback=None):
         self.namespace = namespace if namespace else Namespace()
         self.status_error = NO_ERROR
-        self.migration = migration
+        self.process = process
         self.preparation = preparation
         self.rollback = rollback
         self.map_func_task = dict() if not hasattr(
@@ -94,7 +94,7 @@ class BaseScheduler(object):
         if self.status_error == NO_ERROR:
             with signal_handler.IgnoreInterruptHandler():
                 with signal_handler.InterruptHandler():
-                    self.process_chain(self.migration, STEP_MIGRATION)
+                    self.process_chain(self.process, STEP_MIGRATION)
                 # if we had an error during process migration - rollback
                 if self.status_error != NO_ERROR:
                     self.process_chain(self.rollback, STEP_ROLLBACK)
@@ -104,9 +104,9 @@ class BaseScheduler(object):
 
 
 class SchedulerThread(BaseScheduler):
-    def __init__(self, namespace=None, thread_task=None, migration=None,
+    def __init__(self, namespace=None, thread_task=None, process=None,
                  preparation=None, rollback=None, scheduler_parent=None):
-        super(SchedulerThread, self).__init__(namespace, migration=migration,
+        super(SchedulerThread, self).__init__(namespace, process=process,
                                               preparation=preparation,
                                               rollback=rollback)
         self.map_func_task[WrapThreadTask()] = self.task_run_thread
@@ -151,7 +151,7 @@ class SchedulerThread(BaseScheduler):
         scheduler = self.__class__(namespace=namespace,
                                    thread_task=thread_task,
                                    preparation=self.preparation,
-                                   migration=Cursor(thread_task.getNet()),
+                                   process=Cursor(thread_task.getNet()),
                                    rollback=self.rollback,
                                    scheduler_parent=self)
         self.namespace.vars[CHILDREN][thread_task] = {
