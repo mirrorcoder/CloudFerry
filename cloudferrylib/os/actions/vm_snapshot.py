@@ -35,10 +35,36 @@ class VmSnapshotBasic(action.Action):
         """returns unique for cloud variable from namespace"""
         return '_'.join([VM_STATUSES, self.cloud.position])
 
-    def get_list_of_vms(self):
-        search_opts = {'all_tenants': 'True'}
-        return self.get_compute_resource().get_instances_list(
-            search_opts=search_opts)
+    def get_similar_tenants(self):
+        src_identity = self.src_cloud.resources[utils.IDENTITY_RESOURCE]
+        dst_identity = self.dst_cloud.resources[utils.IDENTITY_RESOURCE]
+        src_tenants = src_identity.read_info()['tenants']
+        dst_tenants = {t['tenant']['name']: t['tenant']['id']
+                       for t in dst_identity.read_info()['tenants']}
+        similar_tenants = {}
+        for ts in src_tenants:
+            index = ts['tenant']['name']
+            if index in dst_tenants:
+                similar_tenants[ts['tenant']['id']] = dst_tenants[index]
+            else:
+                similar_tenants[ts['tenant']['id']] = ''
+        return similar_tenants
+
+    def get_list_of_vms(self, search_opts_tenants):
+        is_dst = self.cloud.position == 'dst'
+        tenants = search_opts_tenants.get('tenant_id', None)
+        search_opts = search_opts_tenants.get('search_opts', {}) \
+            if not is_dst else {}
+        search_opts = search_opts if search_opts else {}
+        search_opts.update(all_tenants=True)
+        tenants_map = {}
+        if is_dst and tenants:
+            tenants_map = self.get_similar_tenants()
+        if tenants:
+            tenant_id = tenants_map[tenants[0]] if is_dst else tenants[0]
+            search_opts.update(tenant_id=tenant_id)
+        return self.get_compute_resource()\
+            .get_instances_list(search_opts)
 
 
 class VmSnapshot(VmSnapshotBasic):
@@ -47,7 +73,9 @@ class VmSnapshot(VmSnapshotBasic):
         LOG.debug("creation of vm snapshots")
         # we gonna store only id and vm status in the state (for now)
         state_to_record = {}
-        for vm in self.get_list_of_vms():
+        search_opts_tenants = kwargs.get('search_opts_tenant',
+                                         {'all_tenant': True})
+        for vm in self.get_list_of_vms(search_opts_tenants):
             state_to_record.update({vm.id: vm.status})
         return {
             self.namespace_variable: state_to_record,
@@ -90,17 +118,23 @@ class VmRestore(VmSnapshotBasic):
 
     def run(self, rollback_vars=None, *args, **kwargs):
         LOG.debug("restoring vms from snapshot")
+
         snapshot_from_namespace = kwargs.get(self.namespace_variable)
         compute = self.get_compute_resource()
         position = self.cloud.position
         vm_id_targets = ('src_id', 'dst_id') \
             if position == 'src' else ('dst_id', 'src_id')
+
         vms_succeeded = {}
         if rollback_vars:
             vms = rollback_vars.get('vms', [])
             vms_succeeded = {pair_vms[vm_id_targets[0]]: pair_vms[
                 vm_id_targets[1]] for pair_vms in vms}
-        for vm in self.get_list_of_vms():
+
+        search_opts_tenants = kwargs.get('search_opts_tenant',
+                                         {'all_tenant': True})
+        vms_cloud = self.get_list_of_vms(search_opts_tenants)
+        for vm in vms_cloud:
             if vm.id in vms_succeeded:
                 LOG.debug("Successfully copied instances")
                 if position == 'src':
@@ -110,17 +144,20 @@ class VmRestore(VmSnapshotBasic):
                     LOG.debug("SRC ID %s", vms_succeeded[vm.id])
                     LOG.debug("DST ID %s", vm.id)
                 continue
-            if vm.id not in snapshot_from_namespace:
-                if position == 'dst':
+            if position == 'dst':
+                if vm.id not in snapshot_from_namespace:
                     # delete this vm - we don't have its id in snapshot data
                     LOG.debug("VM %s will be deleted on %s", vm.id, position)
                     compute.delete_vm_by_id(vm.id)
-            elif vm.status != snapshot_from_namespace.get(vm.id):
-                LOG.debug("Status of %s is changed from %s to %s on %s",
-                          vm.id, vm.status, snapshot_from_namespace.get(vm.id),
-                          position)
-                # reset status of vm
-                compute.change_status(
-                    snapshot_from_namespace.get(vm.id),
-                    instance_id=vm.id)
+            if position == 'src':
+                if vm.status != \
+                        snapshot_from_namespace.get(vm.id):
+                    LOG.debug("Status of %s is changed from %s to %s on %s",
+                              vm.id, vm.status,
+                              snapshot_from_namespace.get(vm.id),
+                              position)
+                    # reset status of vm
+                    compute.change_status(
+                        snapshot_from_namespace.get(vm.id),
+                        instance_id=vm.id)
         return {}
