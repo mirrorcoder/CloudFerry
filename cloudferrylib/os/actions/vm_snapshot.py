@@ -30,31 +30,49 @@ class VmSnapshotBasic(action.Action):
         """returns cloudferry compute resource"""
         return self.cloud.resources[utils.COMPUTE_RESOURCE]
 
+    def get_dst_compute_resource(self):
+        """returns cloudferry compute resource"""
+        return self.dst_cloud.resources[utils.COMPUTE_RESOURCE]
+
+    def get_src_compute_resource(self):
+        """returns cloudferry compute resource"""
+        return self.src_cloud.resources[utils.COMPUTE_RESOURCE]
+
     @property
     def namespace_variable(self):
         """returns unique for cloud variable from namespace"""
         return '_'.join([VM_STATUSES, self.cloud.position])
 
-    def get_list_of_vms(self):
-        search_opts = {'all_tenants': 'True'}
-        return self.get_compute_resource().get_instances_list(
-            search_opts=search_opts)
+    def get_similar_tenants(self):
+        src_identity = self.src_cloud.resources[utils.IDENTITY_RESOURCE]
+        dst_identity = self.dst_cloud.resources[utils.IDENTITY_RESOURCE]
+        src_tenants = src_identity.read_info()['tenants']
+        dst_tenants = {t['tenant']['name']: t['tenant']['id']
+                       for t in dst_identity.read_info()['tenants']}
+        similar_tenants = {}
+        for ts in src_tenants:
+            index = ts['tenant']['name']
+            if index in dst_tenants:
+                similar_tenants[ts['tenant']['id']] = dst_tenants[index]
+            else:
+                similar_tenants[ts['tenant']['id']] = ''
+        return similar_tenants
 
-
-class VmSnapshot(VmSnapshotBasic):
-
-    def run(self, *args, **kwargs):
-        LOG.debug("creation of vm snapshots")
-        # we gonna store only id and vm status in the state (for now)
-        state_to_record = {}
-        for vm in self.get_list_of_vms():
-            state_to_record.update({vm.id: vm.status})
-        return {
-            self.namespace_variable: state_to_record,
-            'rollback_vars': {
-                'vms': []
-            }
-        }
+    def get_list_of_vms(self, search_opts_tenants):
+        is_dst = self.cloud.position == 'dst'
+        tenants = search_opts_tenants.get('tenant_id', None)
+        search_opts = search_opts_tenants.get('search_opts', {}) \
+            if not is_dst else {}
+        search_opts = search_opts if search_opts else {}
+        search_opts.update(all_tenants=True)
+        tenants_map = {}
+        if is_dst and tenants:
+            tenants_map = self.get_similar_tenants()
+        if tenants:
+            tenant_id = tenants_map[tenants[0]] if is_dst else tenants[0]
+            search_opts.update(tenant_id=tenant_id)
+        return self.get_compute_resource()\
+            .get_instances_list(search_opts)
 
 
 class CheckPointVm(action.Action):
@@ -71,18 +89,25 @@ class CheckPointVm(action.Action):
 
     def run(self, rollback_vars=None, *args, **kwargs):
         info = kwargs[self.var_info]['instances']
+        processing_vms_dst = kwargs.get('processing_vms_dst', [])
+        processing_vms_src = kwargs.get('processing_vms_src', {})
         if not info.keys():
             return {}
-        vm = info[info.keys()[0]]
+        inst_id = info.keys()[0]
+        processing_vms_dst.remove(inst_id)
+        processing_vms_src.pop(inst_id, None)
+        vm = info[inst_id]
         rollback_vars_local = copy.deepcopy(rollback_vars)
         success_vms = rollback_vars_local['vms']
         pair_vm = {
             'src_id': vm['old_id'] if 'old_id' in vm else '',
-            'dst_id': info.keys()[0]
+            'dst_id': inst_id
         }
         success_vms.append(pair_vm)
         return {
-            'rollback_vars': rollback_vars_local
+            'rollback_vars': rollback_vars_local,
+            'processing_vms_dst': processing_vms_dst,
+            'processing_vms_src': processing_vms_src
         }
 
 
@@ -90,37 +115,30 @@ class VmRestore(VmSnapshotBasic):
 
     def run(self, rollback_vars=None, *args, **kwargs):
         LOG.debug("restoring vms from snapshot")
-        snapshot_from_namespace = kwargs.get(self.namespace_variable)
-        compute = self.get_compute_resource()
-        position = self.cloud.position
-        vm_id_targets = ('src_id', 'dst_id') \
-            if position == 'src' else ('dst_id', 'src_id')
+        processing_vms_dst = kwargs.get('processing_vms_dst', [])
+        processing_vms_src = kwargs.get('processing_vms_src', {})
+        dst_compute = self.get_dst_compute_resource()
+        src_compute = self.get_src_compute_resource()
+        vm_id_targets = ('src_id', 'dst_id')
         vms_succeeded = {}
         if rollback_vars:
             vms = rollback_vars.get('vms', [])
             vms_succeeded = {pair_vms[vm_id_targets[0]]: pair_vms[
                 vm_id_targets[1]] for pair_vms in vms}
-        for vm in self.get_list_of_vms():
-            if vm.id in vms_succeeded:
-                LOG.debug("Successfully copied instances")
-                if position == 'src':
-                    LOG.debug("SRC ID %s", vm.id)
-                    LOG.debug("DST ID %s", vms_succeeded[vm.id])
-                else:
-                    LOG.debug("SRC ID %s", vms_succeeded[vm.id])
-                    LOG.debug("DST ID %s", vm.id)
-                continue
-            if vm.id not in snapshot_from_namespace:
-                if position == 'dst':
-                    # delete this vm - we don't have its id in snapshot data
-                    LOG.debug("VM %s will be deleted on %s", vm.id, position)
-                    compute.delete_vm_by_id(vm.id)
-            elif vm.status != snapshot_from_namespace.get(vm.id):
-                LOG.debug("Status of %s is changed from %s to %s on %s",
-                          vm.id, vm.status, snapshot_from_namespace.get(vm.id),
-                          position)
-                # reset status of vm
-                compute.change_status(
-                    snapshot_from_namespace.get(vm.id),
-                    instance_id=vm.id)
+        for src_id, dst_id in vms_succeeded.items():
+            LOG.debug("Successfully copied instances")
+            LOG.debug("SRC ID %s", src_id)
+            LOG.debug("DST ID %s", dst_id)
+        for processing_vm in processing_vms_dst:
+            LOG.debug("VM %s will be deleted on %s", processing_vm, "DST")
+            dst_compute.delete_vm_by_id(processing_vm)
+        for inst_id, status_vm in processing_vms_src.items():
+            LOG.debug("Status of %s is changed to original state %s on %s",
+                      inst_id,
+                      status_vm,
+                      "SRC")
+            # reset status of vm
+            src_compute.change_status(
+                status_vm,
+                instance_id=inst_id)
         return {}

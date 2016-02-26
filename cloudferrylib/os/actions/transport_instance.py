@@ -15,6 +15,7 @@
 import logging
 import copy
 
+from cloudferrylib.base import exception
 from cloudferrylib.base.action import action
 from cloudferrylib.os.identity import keystone
 from cloudferrylib.utils import utils as utl
@@ -60,7 +61,8 @@ class TransportInstance(action.Action):
             utl.INSTANCES_TYPE: {
             }
         }
-
+        processing_vms = kwargs.get('processing_vms_dst', [])
+        # Get next one instance
         for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
             instance = self._replace_user_ids(instance)
             src_instance = instance['instance']
@@ -85,14 +87,14 @@ class TransportInstance(action.Action):
                     instance_id: instance
                 }
             }
-
-            one_instance = self.deploy_instance(one_instance)
-
+            one_instance = self.deploy_instance(one_instance,
+                                                processing_vms)
             new_info[utl.INSTANCES_TYPE].update(
                 one_instance[utl.INSTANCES_TYPE])
 
         return {
-            'info': new_info
+            'info': new_info,
+            'processing_vms_dst': processing_vms
         }
 
     def get_dst_image(self, src_image_id):
@@ -127,11 +129,15 @@ class TransportInstance(action.Action):
 
         return image
 
-    def deploy_instance(self, info):
+    def deploy_instance(self, info, processing_vms):
         info = copy.deepcopy(info)
         dst_compute = self.dst_cloud.resources[COMPUTE]
-
-        new_ids = dst_compute.deploy(info)
+        try:
+            new_ids = dst_compute.deploy(info)
+        except (KeyboardInterrupt, exception.TimeoutException):
+            processing_vms.extend(dst_compute._failed_instances)
+            raise
+        processing_vms.extend(new_ids.keys())
         new_info = dst_compute.read_info(search_opts={'id': new_ids.keys()})
         for i in new_ids.iterkeys():
             dst_compute.change_status('shutoff', instance_id=i)

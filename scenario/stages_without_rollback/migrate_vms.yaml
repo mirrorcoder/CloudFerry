@@ -38,12 +38,9 @@ preparation:
           - check_dst_rabbit: True
           - act_get_info_objects_dst: False
       - check_networks: True
-  - create_vm_snapshot_src: True
-  - create_vm_snapshot_dst: True
 
 rollback:
-  - restore_from_vm_snapshot_dst: True
-  - restore_from_vm_snapshot_src: True
+  - restore_vms: True
 
 process:
   - transport_instances_and_dependency_resources:
@@ -95,5 +92,3 @@ process:
       - act_check_point_vm: True
       - is_instances: ['get_next_instance']
       - rename_info_iter: True
-  - verify:
-      - remove_failed_instances: True

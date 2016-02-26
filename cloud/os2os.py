@@ -59,12 +59,15 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
 
     def migrate(self, scenario=None):
         self.scenario = scenario
-        namespace_scheduler = namespace.Namespace({
+        init_namespace = {
             '__init_task__': self.init,
             'info_result': {
                 utl.INSTANCES_TYPE: {}
+            },
+            'rollback_vars': {
+                'vms': []
             }
-        })
+        }
         # "process_migration" is dict with 3 keys:
         #    "preparation" - is cursor that points to tasks must be processed
         #                    before migration i.e - taking snapshots,
@@ -77,6 +80,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         scenario.load_scenario()
         process_migration = {k: cursor.Cursor(v)
                              for k, v in scenario.get_net().items() if v}
+        init_namespace.update(scenario.namespace)
+        namespace_scheduler = namespace.Namespace(init_namespace)
         scheduler_migr = scheduler.Scheduler(namespace=namespace_scheduler,
                                              **process_migration)
         scheduler_migr.start()
