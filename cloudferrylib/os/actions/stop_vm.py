@@ -21,8 +21,12 @@ class StopVms(action.Action):
     def run(self, info=None, **kwargs):
         info = copy.deepcopy(info)
         compute_resource = self.cloud.resources['compute']
-
-        for instance in info['instances']:
-            compute_resource.change_status('shutoff', instance_id=instance)
-
-        return {}
+        processing_vms_src = {}
+        import pdb; pdb.set_trace()
+        for inst_id, instance in info['instances'].items():
+            processing_vms_src[inst_id] = \
+                instance['instance']['status']
+            compute_resource.change_status('shutoff', instance_id=inst_id)
+        return {
+            'processing_vms_src': processing_vms_src
+        }

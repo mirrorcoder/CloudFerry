@@ -18,6 +18,7 @@ import copy
 import random
 import pprint
 import uuid
+import sys
 
 from novaclient.v1_1 import client as nova_client
 from novaclient import exceptions as nova_exc
@@ -82,6 +83,11 @@ CORRECT_STATUSES_AFTER_MIGRATION = {STATUSES_AFTER_MIGRATION[status]
 
 class DestinationCloudNotOperational(RuntimeError):
     pass
+
+
+class FailedCreateInstance(RuntimeError):
+    def __init__(self, inst_id):
+        self.inst_id = inst_id
 
 
 class RandomSchedulerVmDeployer(object):
@@ -658,7 +664,7 @@ class NovaCompute(compute.Compute):
                 self.wait_for_status(new_id, self.get_status, 'active',
                                      timeout=conf.migrate.boot_timeout,
                                      stop_statuses=[ERROR])
-            except exception.TimeoutException:
+            except (exception.TimeoutException, KeyboardInterrupt):
                 LOG.warning("Failed to create instance '%s'", new_id)
                 if self.instance_exists(new_id):
                     instance = self.get_instance(new_id)
@@ -751,11 +757,12 @@ class NovaCompute(compute.Compute):
                     'ram': flavor_obj.ram,
                 }
                 tenant_id = created_instance.tenant_id
-                UsageQuotaCompute.change_usage_quota_instance(db,
-                                                              flavor,
-                                                              curr_user_id,
-                                                              instance_user_id,
-                                                              tenant_id)
+                UsageQuotaCompute\
+                    .change_usage_quota_instance(db,
+                                                 flavor,
+                                                 curr_user_id,
+                                                 instance_user_id,
+                                                 tenant_id)
             LOG.debug("Replacing current user on '%s'", instance_user_id)
             instances.update_user_ids_for_instance(self.mysql_connector,
                                                    created_instance.id,
