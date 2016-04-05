@@ -24,6 +24,7 @@ from neutronclient.v2_0 import client as neutron
 from novaclient import exceptions as nova_exceptions
 from novaclient.v1_1 import client as nova
 
+from cloudferry_devlab.tests import mysql_connector
 from cloudferry_devlab.tests import test_exceptions
 import cloudferry_devlab.tests.utils as utils
 
@@ -82,6 +83,11 @@ class BasePrerequisites(object):
         self.openstack_release = self._get_openstack_release()
         self.server_groups_supported = self.openstack_release in ['icehouse',
                                                                   'juno']
+
+    def mysql_connector(self, db_name, position):
+        config = self.configuration_ini["%s_mysql" %
+                                        (position or self.cloud_prefix)]
+        return mysql_connector.MysqlConnector(config, db_name)
 
     def _get_openstack_release(self):
         for release in OPENSTACK_RELEASES:

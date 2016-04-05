@@ -93,15 +93,35 @@ class CleanEnv(base.BasePrerequisites):
             self.novaclient.flavors.delete(self.get_flavor_id(flavor.name))
             LOG.info('Flavor "%s" has been deleted', flavor.name)
 
+    def delete_image_by_name(self, name):
+        image_id = self.get_image_id(name)
+        self.glanceclient.images.delete(image_id)
+        self.delete_image_by_id_from_db(image_id, 'src')
+
     def clean_images(self):
         all_images = self.migration_utils.get_all_images_from_config()
         images_names = [image['name'] for image in all_images]
-
         for image in self.glanceclient.images.list():
             if image.name not in images_names:
                 continue
-            self.glanceclient.images.delete(self.get_image_id(image.name))
+            self.delete_image_by_name(image.name)
             LOG.info('Image "%s" has been deleted', image.name)
+        for image in self.config.images:
+            if image.get('delete_on_dst', None):
+                self.delete_image_by_id_from_db(image['id'], 'dst')
+
+    def delete_image_by_id_from_db(self, image_id, position):
+        glance_mysql = self.mysql_connector('glance', position)
+        sql_delete_pattern = "DELETE FROM {table} WHERE image_id='{image_id}'"
+        tables_names = ["image_locations", "image_properties",
+                        "image_members"]
+        for table in tables_names:
+            sql_delete_pattern_table = sql_delete_pattern\
+                .format(table=table, image_id=image_id)
+            glance_mysql.execute(sql_delete_pattern_table)
+        sql_image_delete_by_id = "DELETE FROM images WHERE id='{image_id}'"\
+            .format(image_id=image_id)
+        glance_mysql.execute(sql_image_delete_by_id)
 
     def clean_snapshots(self):
         snaps_names = [snapshot['image_name']
@@ -109,8 +129,7 @@ class CleanEnv(base.BasePrerequisites):
         for snapshot in self.glanceclient.images.list():
             if snapshot.name not in snaps_names:
                 continue
-            self.glanceclient.images.delete(
-                self.get_image_id(snapshot.name))
+            self.delete_image_by_name(snapshot.name)
             LOG.info('Snapshot "%s" has been deleted', snapshot.name)
 
     def clean_networks(self):
